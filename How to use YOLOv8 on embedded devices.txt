@@ -1,0 +1,166 @@
+To use YOLOv8 on embedded devices or mobile, you need to adapt the model for resource constraints and deploy it using a lightweight and efficient inference framework. Here is a step-by-step guide to help you run YOLOv8 on embedded systems or mobile devices:
+
+1. Train or Get Pre-trained YOLOv8 Model
+First, you need to train your YOLOv8 model or download a pre-trained model.
+
+Train a YOLOv8 model: Use the official Ultralytics YOLOv8 repository to train a custom YOLOv8 model.
+Download a pre-trained model: You can download a pre-trained YOLOv8 model from the same repository.
+2. Convert YOLOv8 to an Optimized Format
+Since embedded devices or mobile platforms often have limited resources, you will need to convert and optimize the YOLOv8 model.
+
+a) Export YOLOv8 to ONNX Format
+ONNX (Open Neural Network Exchange) is a standard format that enables models to run on various inference engines, including those optimized for mobile or embedded devices.
+
+Export the YOLOv8 model to ONNX:
+
+python
+Copy code
+from ultralytics import YOLO
+
+# Load the YOLOv8 model
+model = YOLO("yolov8n.pt")  # Use your model file (e.g., 'yolov8n.pt' for YOLOv8 nano)
+
+# Export the model to ONNX format
+model.export(format="onnx")
+This will create an ONNX model file (e.g., yolov8n.onnx).
+
+b) Convert to TensorFlow Lite (TFLite) for Mobile
+For mobile deployment, TensorFlow Lite is a lightweight solution. You can convert the YOLOv8 ONNX model to TFLite.
+
+Convert ONNX to TensorFlow: You can use a tool like onnx-tf to convert the ONNX model to TensorFlow format:
+
+bash
+Copy code
+pip install onnx-tf
+onnx-tf convert -i yolov8n.onnx -o yolov8n_tf
+Convert TensorFlow model to TFLite: Use the TensorFlow Lite converter to create a .tflite model:
+
+python
+Copy code
+import tensorflow as tf
+
+# Load the TensorFlow model
+model = tf.saved_model.load("yolov8n_tf")
+
+# Convert to TensorFlow Lite format
+converter = tf.lite.TFLiteConverter.from_saved_model("yolov8n_tf")
+tflite_model = converter.convert()
+
+# Save the TFLite model
+with open("yolov8n.tflite", "wb") as f:
+    f.write(tflite_model)
+c) Using TensorRT for Embedded Devices (Nvidia Jetson)
+If you are deploying YOLOv8 on Nvidia Jetson or other devices with Nvidia GPUs, you can convert the ONNX model to TensorRT format for faster inference.
+
+Install TensorRT on your device and use the trtexec tool to convert your ONNX model to TensorRT:
+
+bash
+Copy code
+trtexec --onnx=yolov8n.onnx --saveEngine=yolov8n.trt --fp16
+This will create a TensorRT engine file (yolov8n.trt), optimized for Nvidia hardware.
+
+3. Deploy on Mobile Devices
+a) Running TFLite Model on Android
+Add TensorFlow Lite dependencies: Add the TensorFlow Lite dependencies to your Android app's build.gradle:
+
+groovy
+Copy code
+implementation 'org.tensorflow:tensorflow-lite:2.9.0'  // Use the latest version
+Load and run the TFLite model in Android:
+
+java
+Copy code
+import org.tensorflow.lite.Interpreter;
+
+// Load TFLite model from assets
+Interpreter tflite = new Interpreter(loadModelFile("yolov8n.tflite"));
+
+// Prepare input data
+float[][][][] input = new float[1][224][224][3];  // Example input size
+
+// Prepare output (based on YOLO's output shape)
+float[][] output = new float[1][25200][85];  // YOLOv8 output shape: [boxes + classes]
+
+// Run inference
+tflite.run(input, output);
+Post-process the output to extract bounding boxes, class labels, and scores from the output tensor.
+
+b) Running TFLite Model on iOS
+Add TensorFlow Lite dependency in your Podfile:
+
+ruby
+Copy code
+pod 'TensorFlowLiteSwift'
+Load and run the model in Swift:
+
+swift
+Copy code
+import TensorFlowLite
+
+// Load the model
+let modelPath = Bundle.main.path(forResource: "yolov8n", ofType: "tflite")!
+let interpreter = try Interpreter(modelPath: modelPath)
+
+// Allocate memory for the interpreter
+try interpreter.allocateTensors()
+
+// Run inference (prepare input and output tensors accordingly)
+Post-process the results just as you would in Android to get bounding boxes, classes, and scores.
+
+4. Deploy on Embedded Devices
+a) Running TensorRT Model on Nvidia Jetson
+Load the TensorRT engine and run inference using the Nvidia TensorRT Python API:
+
+python
+Copy code
+import tensorrt as trt
+
+TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+# Load the TensorRT engine
+with open("yolov8n.trt", "rb") as f:
+    engine_data = f.read()
+runtime = trt.Runtime(TRT_LOGGER)
+engine = runtime.deserialize_cuda_engine(engine_data)
+
+# Create context and allocate memory for inputs and outputs
+context = engine.create_execution_context()
+Run inference and post-process the output.
+
+b) Running the ONNX Model with ONNX Runtime
+If your embedded device supports ONNX Runtime, you can directly run the ONNX model.
+
+Install ONNX Runtime on your embedded device:
+
+bash
+Copy code
+pip install onnxruntime
+Load and run the ONNX model:
+
+python
+Copy code
+import onnxruntime as ort
+import numpy as np
+
+# Load ONNX model
+session = ort.InferenceSession("yolov8n.onnx")
+
+# Prepare input (assuming an image input of 224x224)
+input_tensor = np.random.rand(1, 3, 224, 224).astype(np.float32)
+
+# Run inference
+outputs = session.run(None, {"input": input_tensor})
+Post-process the results to extract bounding boxes, class labels, and confidence scores.
+
+5. Post-Processing
+For both mobile and embedded platforms, once the model has been deployed, you need to implement post-processing to decode the model’s output and apply non-maximum suppression (NMS) to remove redundant detections. This involves:
+
+Extracting bounding boxes, confidence scores, and class labels from the model's output tensor.
+Applying NMS to remove overlapping boxes.
+Summary:
+Train or download a YOLOv8 model.
+Convert the model to an optimized format like ONNX or TFLite.
+Use TensorRT for Nvidia-based embedded devices or TFLite for mobile platforms.
+Deploy the model on Android, iOS, or embedded systems.
+Post-process the model's output to interpret object detection results.
+This process allows you to run YOLOv8 efficiently on resource-constrained devices such as mobile phones and embedded systems like the Nvidia Jetson or Raspberry Pi.
